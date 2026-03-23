@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q-Learning Snake Ajani</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030810;
+    --panel: #070f1e;
+    --border: #0d2a4a;
+    --accent: #00ffe1;
+    --accent2: #ff6b35;
+    --accent3: #7fff00;
+    --text: #a8d8ea;
+    --dim: #2a4a6a;
+    --snake: #7fff00;
+    --food: #ff6b35;
+    --head: #00ffe1;
+    --grid: #0a1a2e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(0,255,225,0.03) 60px),
+      repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(0,255,225,0.03) 60px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .scanline {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(transparent, rgba(0,255,225,0.15), transparent);
+    animation: scan 4s linear infinite;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  @keyframes scan {
+    0% { top: -4px; }
+    100% { top: 100vh; }
+  }
+
+  header {
+    width: 100%;
+    padding: 24px 40px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .logo-badge {
+    background: var(--accent);
+    color: var(--bg);
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 11px;
+    padding: 4px 10px;
+    letter-spacing: 2px;
+  }
+
+  header h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 3px;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  .subtitle {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    margin-left: auto;
+  }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr 260px;
+    gap: 20px;
+    padding: 24px 32px;
+    width: 100%;
+    max-width: 1200px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Center - Canvas */
+  .center-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .canvas-wrapper {
+    position: relative;
+    border: 1px solid var(--border);
+    box-shadow: 0 0 40px rgba(0,255,225,0.08), inset 0 0 40px rgba(0,0,0,0.5);
+  }
+
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  .canvas-corner {
+    position: absolute;
+    width: 12px; height: 12px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .canvas-corner.tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .canvas-corner.tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+  .canvas-corner.bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+  .canvas-corner.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  /* Stats */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(13,42,74,0.5);
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  .stat-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .stat-value.orange { color: var(--accent2); }
+  .stat-value.green { color: var(--accent3); }
+  .stat-value.small { font-size: 12px; }
+
+  /* Reward Chart */
+  .chart-container {
+    width: 100%;
+    height: 100px;
+    position: relative;
+    margin-top: 8px;
+  }
+
+  #rewardChart {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Q-Table Viz */
+  .q-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    margin-top: 8px;
+  }
+
+  .q-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: var(--dim);
+    transition: background 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .q-cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 4px;
+  }
+
+  .btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    border: 1px solid;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn-primary {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-primary:hover, .btn-primary.active {
+    background: var(--accent);
+    color: var(--bg);
+    box-shadow: 0 0 20px rgba(0,255,225,0.4);
+  }
+
+  .btn-danger {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+  .btn-danger:hover {
+    background: var(--accent2);
+    color: var(--bg);
+    box-shadow: 0 0 20px rgba(255,107,53,0.4);
+  }
+
+  .btn-success {
+    border-color: var(--accent3);
+    color: var(--accent3);
+  }
+  .btn-success:hover {
+    background: var(--accent3);
+    color: var(--bg);
+    box-shadow: 0 0 20px rgba(127,255,0,0.4);
+  }
+
+  .btn-purple {
+    border-color: #bf00ff;
+    color: #bf00ff;
+  }
+  .btn-purple:hover {
+    background: #bf00ff;
+    color: var(--bg);
+    box-shadow: 0 0 20px rgba(191,0,255,0.4);
+  }
+
+  /* Speed slider */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .slider-label { font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 3px;
+    background: var(--border);
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  /* State Display */
+  .state-bits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .bit {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: var(--dim);
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .bit.active {
+    background: rgba(0,255,225,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .bit-label {
+    font-size: 8px;
+    color: var(--dim);
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* Episode log */
+  .log {
+    height: 120px;
+    overflow-y: auto;
+    font-size: 10px;
+    color: var(--dim);
+    line-height: 1.8;
+  }
+
+  .log::-webkit-scrollbar { width: 3px; }
+  .log::-webkit-scrollbar-track { background: var(--bg); }
+  .log::-webkit-scrollbar-thumb { background: var(--dim); }
+
+  .log-entry { border-left: 2px solid var(--border); padding-left: 8px; }
+  .log-entry.good { border-color: var(--accent3); color: var(--accent3); }
+  .log-entry.bad { border-color: var(--accent2); }
+
+  /* Params */
+  .param-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(13,42,74,0.4);
+  }
+
+  .param-label { font-size: 10px; color: var(--dim); }
+  .param-val {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  .epsilon-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    margin-top: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .epsilon-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    transition: width 0.5s;
+  }
+
+  /* Action arrows */
+  .action-display {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 4px;
+    width: 90px;
+    height: 90px;
+    margin: 12px auto;
+  }
+
+  .arrow-btn {
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--dim);
+    transition: all 0.2s;
+  }
+  .arrow-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,255,225,0.1);
+    box-shadow: 0 0 10px rgba(0,255,225,0.3);
+  }
+  .arrow-btn.empty { border: none; }
+
+  /* Mode badge */
+  .mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border: 1px solid;
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+  .mode-badge.explore { border-color: var(--accent2); color: var(--accent2); }
+  .mode-badge.exploit { border-color: var(--accent3); color: var(--accent3); }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  footer {
+    padding: 16px;
+    color: var(--dim);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    width: 100%;
+    margin-top: auto;
+    position: relative;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <div class="logo-badge">AI</div>
+  <h1>Q-LEARNING <span>SNAKE</span> AJAN</h1>
+  <div class="subtitle">REINFORCEMENT LEARNING / YAPAY ZEKA PROJESI</div>
+</header>
+
+<div class="main-layout">
+
+  <!-- LEFT PANEL -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">◈ AJAN PARAMETRELERI</div>
+      <div class="param-row">
+        <span class="param-label">Algoritma</span>
+        <span class="param-val">Q-Learning</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">α (Ogrenme)</span>
+        <span class="param-val" id="lr-val">0.001</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">γ (Indirim)</span>
+        <span class="param-val">0.95</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">ε (Epsilon)</span>
+        <span class="param-val" id="eps-val">1.000</span>
+      </div>
+      <div class="epsilon-bar">
+        <div class="epsilon-fill" id="eps-bar" style="width:100%"></div>
+      </div>
+      <div style="font-size:9px;color:var(--dim);margin-top:4px;letter-spacing:1px;">EXPLORATION RATE</div>
+
+      <div style="margin-top:16px;" class="mode-badge explore" id="mode-badge">
+        <div class="dot"></div>
+        <span id="mode-text">EXPLORING</span>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-title">◈ DURUM UZAYI</div>
+      <div style="font-size:9px;color:var(--dim);letter-spacing:1px;margin-bottom:8px;">16-BIT STATE VECTOR</div>
+      <div class="state-bits" id="state-bits">
+      </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px;margin-top:8px;">
+          <div style="font-size:9px;color:#ff4444;letter-spacing:0.5px;">TEHLIKE<br>1.ADIM</div>
+          <div style="font-size:9px;color:#ff6b35;letter-spacing:0.5px;">KONTROL<br>2.ADIM</div>
+          <div style="font-size:9px;color:#00ffe1;letter-spacing:0.5px;">YON<br>↑↓←→</div>
+          <div style="font-size:9px;color:#7fff00;letter-spacing:0.5px;">YIYECEK<br>↑↓←→</div>
+          <div style="font-size:9px;color:#bf00ff;letter-spacing:0.5px;">ETRAF<br>YOGUN</div>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-title">◈ SECILEN EYLEM</div>
+      <div class="action-display">
+        <div class="arrow-btn empty"></div>
+        <div class="arrow-btn" id="act-up">↑</div>
+        <div class="arrow-btn empty"></div>
+        <div class="arrow-btn" id="act-left">←</div>
+        <div class="arrow-btn empty"></div>
+        <div class="arrow-btn" id="act-right">→</div>
+        <div class="arrow-btn empty"></div>
+        <div class="arrow-btn" id="act-down">↓</div>
+        <div class="arrow-btn empty"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center-panel">
+    <div class="canvas-wrapper">
+      <div class="canvas-corner tl"></div>
+      <div class="canvas-corner tr"></div>
+      <div class="canvas-corner bl"></div>
+      <div class="canvas-corner br"></div>
+      <canvas id="gameCanvas" width="440" height="440"></canvas>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="btn-train" onclick="startTraining()">▶ BASLAT</button>
+      <button class="btn btn-danger" onclick="resetAll()">↺ SIFIRLA</button>
+      <button class="btn btn-success" id="btn-mode" onclick="toggleMode()">◉ IZLEME MODU</button>
+      <input type="file" id="qtable-input" accept=".json" style="display:none" onchange="loadQTable(event)">
+      <button class="btn btn-purple" onclick="document.getElementById('qtable-input').click()">⬆ Q-TABLE YUKLE</button>
+    </div>
+
+    <div class="slider-row" style="width:100%;padding:0 8px;">
+      <span class="slider-label">HIZLANDIR</span>
+      <input type="range" id="speed-slider" min="1" max="200" value="15" oninput="updateSpeed(this.value)">
+      <span class="slider-label" id="speed-label">15ms</span>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">◈ EGITIM ISTATISTIGI</div>
+      <div class="stat-row">
+        <span class="stat-label">EPIZOT</span>
+        <span class="stat-value" id="stat-ep">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">SON SKOR</span>
+        <span class="stat-value orange" id="stat-score">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">EN YUKSEK</span>
+        <span class="stat-value green" id="stat-best">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">ORT. SKOR (20)</span>
+        <span class="stat-value small" id="stat-avg">0.0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">TOPLAM ODUL</span>
+        <span class="stat-value small" id="stat-reward">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Q-TABLE BOYUTU</span>
+        <span class="stat-value small" id="stat-qtable">0</span>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-title">◈ SKOR GRAFIGI</div>
+      <div class="chart-container">
+        <canvas id="rewardChart"></canvas>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-title">◈ EPIZOT KAYDI</div>
+      <div class="log" id="episode-log"></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-title">◈ ODUL FONKSIYONU</div>
+      <div class="param-row">
+        <span class="param-label">Yiyecek yeme</span>
+        <span class="param-val" style="color:var(--accent3)">+10</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">Duvar carpma</span>
+        <span class="param-val" style="color:var(--accent2)">-10</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">Yaklasma</span>
+        <span class="param-val" style="color:var(--accent3)">+1</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">Uzaklasma</span>
+        <span class="param-val" style="color:var(--accent2)">-1</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Q-LEARNING SNAKE AJAN — YAPAY ZEKA DERSI PROJE DEMOSU — 2026</footer>
+
+<script>
+// ========================
+// SNAKE Q-LEARNING AGENT
+// v2 — 16-bit lookahead state + working mode toggle
+// ========================
+
+const GRID = 20;
+const CELL = 22;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Q-Learning params
+const ALPHA = 0.001;      // daha hizli ogrenme
+const GAMMA = 0.95;
+let epsilon = 1.0;
+const EPS_MIN = 0.001;
+const EPS_DECAY = 0.999;  // daha yavas azalma = daha cok kesif
+
+let qTable = {};
+let snake, food, dir, score, steps, totalReward;
+let episode = 0;
+let bestScore = 0;
+let scoreHistory = [];
+let training = false;
+let trainInterval = null;
+let gameSpeed = 15;
+
+// MOD: 'train' = ajan egitim modunda, 'watch' = epsilon=0 sadece izle
+let mode = 'train';
+
+const DIRS = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
+const DIR_NAMES = ['↑','→','↓','←'];
+
+function initGame() {
+  const mid = Math.floor(GRID/2);
+  snake = [{x:mid,y:mid},{x:mid,y:mid+1},{x:mid,y:mid+2}];
+  dir = 0;
+  score = 0;
+  steps = 0;
+  totalReward = 0;
+  spawnFood();
+}
+
+function spawnFood() {
+  let pos;
+  do {
+    pos = {x: Math.floor(Math.random()*GRID), y: Math.floor(Math.random()*GRID)};
+  } while (snake.some(s=>s.x===pos.x&&s.y===pos.y));
+  food = pos;
+}
+
+// ── 16-BIT STATE ──
+// [danger1_S, danger1_R, danger1_L,   <- 1 adim tehlike
+//  danger2_S, danger2_R, danger2_L,   <- 2 adim lookahead (YENI)
+//  dir_U, dir_D, dir_L, dir_R,        <- mevcut yon
+//  food_U, food_D, food_L, food_R]    <- yiyecek yonu
+function getState() {
+  const head = snake[0];
+  const straight = DIRS[dir];
+  const rightDir = DIRS[(dir+1)%4];
+  const leftDir  = DIRS[(dir+3)%4];
+
+  // steps adim ilerisi tehlikeli mi?
+  // Kuyruk o adim kadar kisalacagi icin son 'steps' segment sayilmaz
+  function isDanger(d, lookahead) {
+    const nx = head.x + d.x * lookahead;
+    const ny = head.y + d.y * lookahead;
+    if(nx<0||nx>=GRID||ny<0||ny>=GRID) return 1;
+    
+    // Eğer yiyecek yenecekse kuyruk kaymaz, tüm gövde tehlikeli
+    const nextHead = {x: head.x + DIRS[dir].x, y: head.y + DIRS[dir].y};
+    const willEat = nextHead.x===food.x && nextHead.y===food.y;
+    
+    const futureSnake = willEat ? snake : snake.slice(0, snake.length - lookahead);
+    if(futureSnake.some(s=>s.x===nx&&s.y===ny)) return 1;
+    return 0;
+  }
+
+  // Etraf yogunlugu (2 bit)
+  const surroundings = [-1,0,1].flatMap(dx =>
+    [-1,0,1].map(dy => {
+      if(dx===0 && dy===0) return 0;
+      const nx = head.x+dx, ny = head.y+dy;
+      if(nx<0||nx>=GRID||ny<0||ny>=GRID) return 0;
+      return snake.some((s,i)=>i>0&&s.x===nx&&s.y===ny) ? 1 : 0;
+    })
+  ).reduce((a,b)=>a+b, 0);
+  const density = Math.min(Math.floor(surroundings/2), 3);
+
+  return [
+    isDanger(straight,  1), isDanger(rightDir, 1), isDanger(leftDir,  1),
+    isDanger(straight,  2), isDanger(rightDir, 2), isDanger(leftDir,  2),
+    dir===0?1:0, dir===2?1:0, dir===3?1:0, dir===1?1:0,
+    food.y < head.y ? 1:0,
+    food.y > head.y ? 1:0,
+    food.x < head.x ? 1:0,
+    food.x > head.x ? 1:0,
+    (density & 2) > 0 ? 1 : 0,
+    (density & 1) > 0 ? 1 : 0,
+  ].join('');
+}
+
+function getQValues(state) {
+  if(!qTable[state]) qTable[state] = [0,0,0];
+  return qTable[state];
+}
+
+function chooseAction(state) {
+  const eps = mode === 'watch' ? 0 : epsilon;
+  if(Math.random() < eps) return Math.floor(Math.random()*3);
+  const q = getQValues(state);
+  return q.indexOf(Math.max(...q));
+}
+
+function applyAction(action) {
+  if(action===1) dir = (dir+1)%4;
+  else if(action===2) dir = (dir+3)%4;
+}
+
+function step(action) {
+  const prevDist = Math.abs(snake[0].x-food.x)+Math.abs(snake[0].y-food.y);
+  applyAction(action);
+  const head = {x: snake[0].x+DIRS[dir].x, y: snake[0].y+DIRS[dir].y};
+
+  // Duvar kontrolü önce
+  if(head.x<0||head.x>=GRID||head.y<0||head.y>=GRID) {
+    return {reward:-1000, done:true};
+  }
+
+  // Kuyruğu geçici çıkar, sonra kuyruk çarpışmasını kontrol et
+  const tail = snake[snake.length-1];
+  const bodyWithoutTail = snake.slice(0, snake.length-1);
+  if(bodyWithoutTail.some(s=>s.x===head.x&&s.y===head.y)) {
+    return {reward:-1000, done:true};
+  }
+
+  snake.unshift(head);
+  steps++;
+
+  if(head.x===food.x && head.y===food.y) {
+    score++;
+    steps = 0;
+    spawnFood();
+    return {reward:10 + score, done:false};
+  }
+
+  snake.pop();
+
+  const newDist = Math.abs(head.x-food.x)+Math.abs(head.y-food.y);
+  const reward = newDist < prevDist ? 1 : -1;
+  if(steps > GRID*GRID*2) return {reward:-1000, done:true};
+  return {reward, done:false};
+}
+
+function trainStep() {
+  const state = getState();
+  const action = chooseAction(state);
+  const {reward, done} = step(action);
+  totalReward += reward;
+
+  if(mode === 'train') {
+    const nextState = getState();
+    const q = getQValues(state);
+    const nextQ = getQValues(nextState);
+    q[action] = q[action] + ALPHA*(reward + GAMMA*Math.max(...nextQ) - q[action]);
+  }
+
+  updateActionDisplay(action);
+  updateStateDisplay(state);
+
+  if(done) { endEpisode(); return; }
+  drawGame();
+}
+
+function endEpisode() {
+  episode++;
+  if(score > bestScore) bestScore = score;
+  scoreHistory.push(score);
+  if(scoreHistory.length > 100) scoreHistory.shift();
+
+  const avg = scoreHistory.slice(-20).reduce((a,b)=>a+b,0)/Math.min(scoreHistory.length,20);
+
+  if(mode === 'train' && epsilon > EPS_MIN) epsilon *= EPS_DECAY;
+
+  document.getElementById('stat-ep').textContent = episode;
+  document.getElementById('stat-score').textContent = score;
+  document.getElementById('stat-best').textContent = bestScore;
+  document.getElementById('stat-avg').textContent = avg.toFixed(1);
+  document.getElementById('stat-reward').textContent = totalReward.toFixed(0);
+  document.getElementById('stat-qtable').textContent = Object.keys(qTable).length;
+  document.getElementById('eps-val').textContent = (mode==='watch'?0:epsilon).toFixed(3);
+  document.getElementById('eps-bar').style.width = (mode==='watch'?0:epsilon*100)+'%';
+
+  const badge = document.getElementById('mode-badge');
+  const modeText = document.getElementById('mode-text');
+  if(mode === 'watch') {
+    badge.className = 'mode-badge exploit';
+    modeText.textContent = 'WATCH — ε=0';
+  } else if(epsilon > 0.5) {
+    badge.className = 'mode-badge explore';
+    modeText.textContent = 'EXPLORING';
+  } else if(epsilon > 0.1) {
+    badge.className = 'mode-badge';
+    badge.style.borderColor='var(--accent)'; badge.style.color='var(--accent)';
+    modeText.textContent = 'BALANCING';
+  } else {
+    badge.className = 'mode-badge exploit';
+    modeText.textContent = 'EXPLOITING';
+  }
+
+  addLog(episode, score, avg);
+  drawRewardChart();
+  initGame();
+}
+
+function addLog(ep, sc, avg) {
+  const log = document.getElementById('episode-log');
+  const entry = document.createElement('div');
+  const isNew = sc >= bestScore && sc > 0;
+  entry.className = 'log-entry' + (isNew ? ' good':'');
+  const modeTag = mode==='watch' ? '[WATCH]' : `ε:${epsilon.toFixed(2)}`;
+  entry.textContent = `EP ${String(ep).padStart(4,'0')} | SCR:${sc} | AVG:${avg.toFixed(1)} | ${modeTag}`;
+  log.insertBefore(entry, log.firstChild);
+  if(log.children.length > 50) log.removeChild(log.lastChild);
+}
+
+// ========================
+// RENDERING
+// ========================
+function drawGame() {
+  ctx.fillStyle = '#030810';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Grid
+  ctx.strokeStyle = '#0a1a2e';
+  ctx.lineWidth = 0.5;
+  for(let i=0;i<=GRID;i++) {
+    ctx.beginPath();
+    ctx.moveTo(i*CELL,0); ctx.lineTo(i*CELL,canvas.height);
+    ctx.moveTo(0,i*CELL); ctx.lineTo(canvas.width,i*CELL);
+    ctx.stroke();
+  }
+
+  // Lookahead danger highlight — 2 adim ilerisi
+  const head = snake[0];
+  const straight = DIRS[dir];
+  const rightDir = DIRS[(dir+1)%4];
+  const leftDir  = DIRS[(dir+3)%4];
+  [[straight,2],[rightDir,2],[leftDir,2]].forEach(([d,n])=>{
+    const nx = head.x + d.x*n;
+    const ny = head.y + d.y*n;
+    if(nx>=0&&nx<GRID&&ny>=0&&ny<GRID) {
+      ctx.fillStyle = 'rgba(255,107,53,0.07)';
+      ctx.fillRect(nx*CELL, ny*CELL, CELL, CELL);
+    }
+  });
+
+  // Food
+  const fx = food.x*CELL+CELL/2;
+  const fy = food.y*CELL+CELL/2;
+  ctx.save();
+  ctx.shadowColor = '#ff6b35'; ctx.shadowBlur = 15;
+  ctx.fillStyle = '#ff6b35';
+  ctx.beginPath(); ctx.arc(fx, fy, CELL/2-3, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  // Food pulse
+  ctx.strokeStyle = 'rgba(255,107,53,0.3)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(fx, fy, CELL/2+3+Math.sin(Date.now()/300)*3, 0, Math.PI*2);
+  ctx.stroke();
+
+  // Snake
+  for(let i=snake.length-1;i>=0;i--) {
+    const s = snake[i];
+    const t = i/snake.length;
+    if(i===0) {
+      ctx.save();
+      ctx.shadowColor = mode==='watch' ? '#ffff00' : '#00ffe1';
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = mode==='watch' ? '#ffff00' : '#00ffe1';
+      ctx.fillRect(s.x*CELL+1, s.y*CELL+1, CELL-2, CELL-2);
+      ctx.restore();
+      // Eyes
+      ctx.fillStyle = '#030810';
+      if(dir===0||dir===2) {
+        ctx.fillRect(s.x*CELL+4, s.y*CELL+6, 3, 3);
+        ctx.fillRect(s.x*CELL+CELL-7, s.y*CELL+6, 3, 3);
+      } else {
+        ctx.fillRect(s.x*CELL+6, s.y*CELL+4, 3, 3);
+        ctx.fillRect(s.x*CELL+6, s.y*CELL+CELL-7, 3, 3);
+      }
+    } else {
+      const g = Math.floor(255*(0.4+0.6*(1-t)));
+      ctx.fillStyle = `rgba(127,${g},0,${0.8-t*0.4})`;
+      ctx.fillRect(s.x*CELL+2, s.y*CELL+2, CELL-4, CELL-4);
+    }
+  }
+
+  // Score overlay
+  ctx.fillStyle = mode==='watch' ? 'rgba(255,255,0,0.8)' : 'rgba(0,255,225,0.7)';
+  ctx.font = '12px Orbitron, monospace';
+  ctx.fillText(`SKOR: ${score}  ${mode==='watch'?'[IZLENIYOR]':''}`, 10, 20);
+}
+
+// ========================
+// REWARD CHART
+// ========================
+function drawRewardChart() {
+  const c = document.getElementById('rewardChart');
+  const x = c.getContext('2d');
+  const w = c.width = c.offsetWidth;
+  const h = c.height = c.offsetHeight;
+  x.clearRect(0,0,w,h);
+  if(scoreHistory.length < 2) return;
+  const data = scoreHistory.slice(-60);
+  const max = Math.max(...data, 1);
+  // Gradient fill
+  const grad = x.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(0,255,225,0.3)'); grad.addColorStop(1,'rgba(0,255,225,0)');
+  x.beginPath();
+  data.forEach((v,i)=>{
+    const px=(i/(data.length-1))*w, py=h-(v/max)*(h-10)-5;
+    i===0?x.moveTo(px,py):x.lineTo(px,py);
+  });
+  x.lineTo(w,h); x.lineTo(0,h); x.fillStyle=grad; x.fill();
+  // Line stroke
+  x.beginPath(); x.strokeStyle='#00ffe1'; x.lineWidth=1.5;
+  data.forEach((v,i)=>{
+    const px=(i/(data.length-1))*w, py=h-(v/max)*(h-10)-5;
+    i===0?x.moveTo(px,py):x.lineTo(px,py);
+  });
+  x.stroke();
+  // Lookahead ortalama cizgisi
+  if(data.length>=5) {
+    x.beginPath(); x.strokeStyle='rgba(255,107,53,0.7)'; x.lineWidth=1; x.setLineDash([3,3]);
+    data.forEach((v,i)=>{
+      if(i<4) return;
+      const avg=data.slice(i-4,i+1).reduce((a,b)=>a+b)/5;
+      const px=(i/(data.length-1))*w, py=h-(avg/max)*(h-10)-5;
+      i===4?x.moveTo(px,py):x.lineTo(px,py);
+    });
+    x.stroke(); x.setLineDash([]);
+  }
+}
+
+// ========================
+// STATE DISPLAY (16-bit)
+// ========================
+function initStateDisplay() {
+  const container = document.getElementById('state-bits');
+  // 1-adim tehlike | 2-adim lookahead | yon | yiyecek
+  const labels = ['D1S','D1R','D1L','D2S','D2R','D2L','U','D','L','R','FU','FD','FL','FR','DN1','DN0'];
+  container.innerHTML = '';
+  labels.forEach((l,i)=>{
+    const bit = document.createElement('div');
+    bit.className = 'bit';
+    bit.id = `bit-${i}`;
+    bit.textContent = l;
+    container.appendChild(bit);
+    // grup bitince yeni satir
+    if ([2,5,9,13].includes(i)) {
+      const br = document.createElement('div');
+      br.style.flexBasis = '100%';
+      br.style.height = '0';
+      container.appendChild(br);
+    }
+  });
+}
+
+function updateStateDisplay(state) {
+  const colors = {
+    active: ['#ff4444','#ff4444','#ff4444',   // D1 - tehlike: kirmizi
+             '#ff6b35','#ff6b35','#ff6b35',   // D2 - lookahead: turuncu
+             '#00ffe1','#00ffe1','#00ffe1','#00ffe1',  // yon: cyan
+             '#7fff00','#7fff00','#7fff00','#7fff00', // yiyecek: yesil
+             '#bf00ff','#bf00ff']  // density: mor
+             
+  };
+  for(let i=0;i<16;i++){
+    const el = document.getElementById(`bit-${i}`);
+    if(!el) continue;
+    const isActive = state[i] === '1';
+    el.style.background = isActive ? colors.active[i] + '33' : '';
+    el.style.borderColor = isActive ? colors.active[i] : 'var(--border)';
+    el.style.color       = isActive ? colors.active[i] : 'var(--dim)';
+  }
+}
+
+function updateActionDisplay(action) {
+  ['act-up','act-right','act-down','act-left'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  const actualDir = action===0?dir:action===1?(dir+1)%4:(dir+3)%4;
+  document.getElementById(['act-up','act-right','act-down','act-left'][actualDir]).classList.add('active');
+}
+
+// ========================
+// CONTROLS
+// ========================
+function startTraining() {
+  if(training) {
+    clearInterval(trainInterval); training = false;
+    document.getElementById('btn-train').textContent = '▶ BASLAT';
+    return;
+  }
+  training = true;
+  document.getElementById('btn-train').textContent = '⏸ DURAKLAT';
+  initGame();
+  trainInterval = setInterval(trainStep, gameSpeed);
+}
+
+function resetAll() {
+  clearInterval(trainInterval); training = false;
+  document.getElementById('btn-train').textContent = '▶ BASLAT';
+  qTable = {}; epsilon = 1.0; episode = 0; bestScore = 0; scoreHistory = [];
+  mode = 'train';
+  document.getElementById('btn-mode').textContent = '◉ IZLEME MODU';
+  initGame(); drawGame();
+  ['stat-ep','stat-score','stat-best'].forEach(id=>document.getElementById(id).textContent='0');
+  document.getElementById('stat-avg').textContent='0.0';
+  document.getElementById('stat-reward').textContent='0';
+  document.getElementById('stat-qtable').textContent='0';
+  document.getElementById('eps-val').textContent='1.000';
+  document.getElementById('eps-bar').style.width='100%';
+  document.getElementById('episode-log').innerHTML='';
+  drawRewardChart();
+}
+
+function loadQTable(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      let count = 0;
+      Object.entries(data.q_table).forEach(([k, v]) => {
+        // "(1, 0, 1, ...)" formatini "1010..." string key'e cevir
+        const key = k.replace(/[\(\)\s]/g,'').split(',').join('');
+        qTable[key] = v;
+        count++;
+      });
+      epsilon = 0;
+      mode = 'watch';
+      document.getElementById('btn-mode').textContent = '◉ EGITIM MODU';
+      document.getElementById('eps-val').textContent = '0.000';
+      document.getElementById('eps-bar').style.width = '0%';
+      document.getElementById('stat-qtable').textContent = count;
+      const log = document.getElementById('episode-log');
+      const info = document.createElement('div');
+      info.className = 'log-entry good';
+      info.textContent = `--- Q-TABLE YUKLENDI: ${count} durum, IZLEME MODU ---`;
+      log.insertBefore(info, log.firstChild);
+    } catch(err) {
+      alert('Q-table yuklenemedi: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function toggleMode() {
+  // TRAIN modu: ajan ogrenirken oynuyor (epsilon > 0)
+  // WATCH modu: epsilon=0, saf somuru - en iyi bildigi hamleri yapiyor
+  if(mode === 'train') {
+    mode = 'watch';
+    document.getElementById('btn-mode').textContent = '◉ EGITIM MODU';
+    // Bilgi kutusu
+    const log = document.getElementById('episode-log');
+    const info = document.createElement('div');
+    info.className = 'log-entry good';
+    info.textContent = `--- IZLEME MODU: epsilon=0, ${Object.keys(qTable).length} durum ---`;
+    log.insertBefore(info, log.firstChild);
+  } else {
+    mode = 'train';
+    document.getElementById('btn-mode').textContent = '◉ IZLEME MODU';
+    const log = document.getElementById('episode-log');
+    const info = document.createElement('div');
+    info.className = 'log-entry';
+    info.textContent = `--- EGITIM MODU: epsilon=${epsilon.toFixed(3)} ---`;
+    log.insertBefore(info, log.firstChild);
+  }
+}
+
+function updateSpeed(val) {
+  gameSpeed = Math.max(1, 201-val);
+  document.getElementById('speed-label').textContent = gameSpeed+'ms';
+  if(training) {
+    clearInterval(trainInterval);
+    trainInterval = setInterval(trainStep, gameSpeed);
+  }
+}
+
+// ========================
+// INIT
+// ========================
+initStateDisplay();
+initGame();
+drawGame();
+drawRewardChart();
+// Animation loop for food pulse and lookahead highlight
+setInterval(()=>{ if(!training) drawGame(); }, 50);
+</script>
+</body>
+</html>
